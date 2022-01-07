@@ -34,8 +34,9 @@ spec:
               containers:
                 - name: nextflow-driver
                   image: docker.io/nextflow/nextflow:21.10.6
-                  command: ["echo"]
-                  args: [""] 
+                  command: ["/bin/sh","-c"]
+                  args: ["/bin/echo \"${JSON}\" > params.json; cat params.json"]
+                  # nextflow run pgscatalog/pgsc_calc -r master -profile k8s -params-file params.json -w /workspace/work"]
                   volumeMounts:
                     - name: vol-1
                       mountPath: "/workspace"
@@ -44,6 +45,8 @@ spec:
                       value: k8s
                     - name: NXF_HOME
                       value: /workspace/nextflow
+                    - name: JSON
+                      value: "REPLACED"
                   resources:
                     requests:
                       cpu: 2
@@ -55,6 +58,6 @@ spec:
           - src:
               dependencyName: payload
               dataKey: body
-            dest: spec.containers.0.args.0
+            dest: spec.containers.0.env.2.value
 
 
