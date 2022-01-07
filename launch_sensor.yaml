@@ -11,7 +11,7 @@ spec:
     eventName: calculate
   triggers:
   - template:
-      name: payload
+      name: webhook-pgscalc-trigger
       k8s:
         group: ""
         version: v1
@@ -22,9 +22,9 @@ spec:
             apiVersion: v1
             kind: Pod
             metadata:
-              generateName: payload-
+              generateName: pgscalc-
               labels:
-                app: payload
+                app: nextflow
             spec:
               restartPolicy: Never
               volumes:
@@ -32,23 +32,29 @@ spec:
                   persistentVolumeClaim:
                     claimName: nfsclaim
               containers:
-              - name: nextflow-driver
-                image: docker.io/nextflow/nextflow:21.10.6                
-                command: ["nextflow"]
-                args: ["run", "pgscatalog/pgsc_calc", "-r", "master", "-profile", "test,k8s", "--input", "/workspace/data/samplesheet.csv", "--scorefile", "/workspace/data/PGS001229_22.txt", "-w", "/workspace/work"]  
-                volumeMounts:
-                  - name: vol-1
-                    mountPath: "/workspace"
-                env:
-                  - name: NXF_EXECUTOR
-                    value: k8s
-                  - name: NXF_HOME
-                    value: /workspace/nextflow
-              resources:
-                requests:
-                  cpu: 2
-                  memory: 2G
-                limits:
-                  cpu: 2
-                  memory: 3G                  
- 
+                - name: nextflow-driver
+                  image: docker.io/nextflow/nextflow:21.10.6
+                  command: ["echo"]
+                  args: [""] 
+                  volumeMounts:
+                    - name: vol-1
+                      mountPath: "/workspace"
+                  env:
+                    - name: NXF_EXECUTOR
+                      value: k8s
+                    - name: NXF_HOME
+                      value: /workspace/nextflow
+                  resources:
+                    requests:
+                      cpu: 2
+                      memory: 2G
+                    limits:
+                      cpu: 2
+                      memory: 3G
+        parameters:
+          - src:
+              dependencyName: payload
+              dataKey: body
+            dest: spec.containers.0.args.0
+
+
