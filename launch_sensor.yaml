@@ -35,18 +35,22 @@ spec:
                 - name: nextflow-driver
                   image: docker.io/nextflow/nextflow:21.10.6
                   command: ["/bin/sh","-c"]
-                  args: ["/bin/echo \"${JSON}\" > params.json; cat params.json"]
-                  # nextflow run pgscatalog/pgsc_calc -r master -profile k8s -params-file params.json -w /workspace/work"]
+                  # TODO: containerise the pipeline to avoid cloning so much
+                  args: ["/bin/echo \"${JSON}\" > /tmp/params.json; /bin/echo $(ls /workspace/data)"]
                   volumeMounts:
                     - name: vol-1
                       mountPath: "/workspace"
                   env:
+                    - name: JSON
+                      value: "REPLACED"
                     - name: NXF_EXECUTOR
                       value: k8s
                     - name: NXF_HOME
                       value: /workspace/nextflow
-                    - name: JSON
-                      value: "REPLACED"
+                    - name: NXF_WORK
+                      value: /workspace/work
+                    - name: NXF_PARAMS_FILE
+                      value: /tmp/params.json
                   resources:
                     requests:
                       cpu: 2
@@ -57,7 +61,7 @@ spec:
         parameters:
           - src:
               dependencyName: payload
-              dataKey: body
-            dest: spec.containers.0.env.2.value
+              dataKey: body.params
+            dest: spec.containers.0.env.0.value
 
 
