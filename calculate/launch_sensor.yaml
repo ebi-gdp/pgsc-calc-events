@@ -36,7 +36,7 @@ spec:
                   image: docker.io/nextflow/nextflow:21.10.6
                   command: ["/bin/sh","-c"]
                   # TODO: containerise the pipeline to avoid cloning so much
-                  args: ["/bin/echo \"${JSON}\" > /tmp/params.json; cat /tmp/params.json; nextflow run pgscatalog/pgsc_calc -name ${ID} -latest -profile k8s -params-file /tmp/params.json"]
+                  args: ["/bin/echo \"${JSON}\" > /tmp/params.json; cat /tmp/params.json; nextflow run pgscatalog/pgsc_calc -name ${ID} -latest -profile k8s -params-file /tmp/params.json -with-weblog http://pgscalc-log-webhook-eventsource-svc:4567"]
                   volumeMounts:
                     - name: vol-1
                       mountPath: "/workspace"

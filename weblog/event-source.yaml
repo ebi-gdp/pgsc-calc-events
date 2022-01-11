@@ -10,5 +10,5 @@ spec:
   webhook:
     log:
       port: "4567"
-      endpoint: /log
+      endpoint: /
       method: POST
