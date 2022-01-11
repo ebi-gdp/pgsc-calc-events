@@ -36,7 +36,7 @@ spec:
                   image: docker.io/nextflow/nextflow:21.10.6
                   command: ["/bin/sh","-c"]
                   # TODO: containerise the pipeline to avoid cloning so much
-                  args: ["/bin/echo \"${JSON}\" > /tmp/params.json; cat /tmp/params.json; nextflow drop pgscatalog/pgsc_calc; nextflow run pgscatalog/pgsc_calc -profile k8s -params-file /tmp/params.json"]
+                  args: ["/bin/echo \"${JSON}\" > /tmp/params.json; cat /tmp/params.json; nextflow run pgscatalog/pgsc_calc -name ${ID} -latest -profile k8s -params-file /tmp/params.json"]
                   volumeMounts:
                     - name: vol-1
                       mountPath: "/workspace"
@@ -44,6 +44,8 @@ spec:
                     - name: JSON
                       value: "REPLACED"
                     - name: NXF_WORK
+                      value: "REPLACED"
+                    - name: ID
                       value: "REPLACED"
                     - name: NXF_ANSI_LOG
                       value: "false"
@@ -68,6 +70,11 @@ spec:
               dataKey: body.nxf_work
               value: /workspace/work
             dest: spec.containers.0.env.1.value
+          - src:
+              dependencyName: payload
+              dataKey: body.id
+              value: /workspace/work
+            dest: spec.containers.0.env.2.value
 
 
 
