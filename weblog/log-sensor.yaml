@@ -7,7 +7,19 @@ spec:
     - name: payload
       eventSourceName: pgscalc-log-webhook
       eventName: log
+      transform:
+        jq: ".body.runName, .body.event, .body.utcTime, .body.runId"
+      filters:
+        data:
+          - path: body.event
+            type: string
+            value:
+              - "started"
+              - "completed"
+              - "error"
   triggers:
   - template:
+      conditions: "payload"
       name: log-trigger
-      log: {}
+      log: {}        
+
