@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: pgscalc-log
+spec:
+  dependencies:
+    - name: payload
+      eventSourceName: pgscalc-log-webhook
+      eventName: log
+  triggers:
+  - template:
+      name: log-trigger
+      log: {}
