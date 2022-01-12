@@ -4,22 +4,33 @@ metadata:
   name: pgscalc-log
 spec:
   dependencies:
-    - name: payload
+    - name: test-log
       eventSourceName: pgscalc-log-webhook
       eventName: log
-      transform:
-        jq: ".body.runName, .body.event, .body.utcTime, .body.runId"
-      filters:
-        data:
-          - path: body.event
-            type: string
-            value:
-              - "started"
-              - "completed"
-              - "error"
   triggers:
   - template:
-      conditions: "payload"
-      name: log-trigger
-      log: {}        
+      name: kafka-trigger
+      kafka:
+        url: my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+        topic: my-topic
+        partition: 0
+        payload:
+            - src:
+                dependencyName: test-log
+                dataKey: body.event
+              dest: event
+            - src:
+                dependencyName: test-log
+                dataKey: body.runName
+              dest: id
+            - src:
+                dependencyName: test-log
+                dataKey: body.utcTime
+              dest: utcTime
+            - src:
+                dependencyName: test-log
+                dataKey: body.runId
+              dest: runId
+              
+
 
