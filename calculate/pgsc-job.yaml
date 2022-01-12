@@ -5,6 +5,7 @@ metadata:
   labels:
     app: nextflow
 spec:
+  ttlSecondsAfterFinished: 0
   template:
     spec:
       containers:
@@ -47,4 +48,5 @@ spec:
         - name: vol-1
           persistentVolumeClaim:
             claimName: nfsclaim
+
 
