@@ -31,6 +31,8 @@ spec:
                 dependencyName: test-log
                 dataKey: body.runId
               dest: runId
-              
-
+            - src:
+                dependencyName: test-log
+                dataKey: body.metadata
+              dest: metadata          
 
