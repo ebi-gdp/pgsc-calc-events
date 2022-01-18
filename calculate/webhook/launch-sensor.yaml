@@ -22,15 +22,13 @@ spec:
           - src:
               dependencyName: payload
               dataKey: body.params
-            dest: spec.containers.0.env.0.value
+            dest: spec.template.spec.containers.0.env.0.value
           - src:
               dependencyName: payload
               dataKey: body.nxf_work
-            dest: spec.containers.0.env.1.value
+            dest: spec.template.spec.containers.0.env.1.value
           - src:
               dependencyName: payload
               dataKey: body.id
-            dest: spec.containers.0.env.2.value
-
-
+            dest: spec.template.spec.containers.0.env.2.value
 
