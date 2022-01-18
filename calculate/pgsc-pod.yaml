@@ -47,4 +47,10 @@ spec:
     - name: vol-1
       persistentVolumeClaim:
         claimName: nfsclaim
-
+  initContainers:
+    - name: init-json-validate
+      image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema:4.4.0
+      command: ['sh', '-c', "true"]
+      env: 
+        - name: JSON
+          value: REPLACED
