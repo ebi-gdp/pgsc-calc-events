@@ -28,12 +28,14 @@ spec:
           value: /workspace/nxf_home
         - name: NXF_EXECUTOR
           value: k8s
+        - name: NXF_OPTS
+          value: '-Xms1g -Xmx4g'
       image: 'docker.io/nextflow/nextflow:21.10.6'
       name: nextflow-driver
       resources:
         limits:
           cpu: 2
-          memory: 3G
+          memory: 4G
         requests:
           cpu: 2
           memory: 2G
