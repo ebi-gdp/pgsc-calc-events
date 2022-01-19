@@ -54,3 +54,5 @@ spec:
       env: 
         - name: JSON
           value: REPLACED
+  imagePullSecrets: 
+      - name: gitlabpullimage
