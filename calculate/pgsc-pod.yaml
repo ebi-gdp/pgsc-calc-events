@@ -50,7 +50,7 @@ spec:
   initContainers:
     - name: init-json-validate
       image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema:4.4.0
-      command: ['sh', '-c', "true"]
+      command: ['sh', '-c', '/bin/echo "${JSON}" > /tmp/params.json; cat /tmp/params.json; jsonschema calculate-schema.json -i /tmp/params.json']
       env: 
         - name: JSON
           value: REPLACED
