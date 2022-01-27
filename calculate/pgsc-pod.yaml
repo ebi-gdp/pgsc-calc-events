@@ -8,15 +8,18 @@ spec:
   containers:
     - args:
         - >-
-          /bin/echo "${JSON}" > /tmp/params.json; cat /tmp/params.json; nextflow
-          run pgscatalog/pgsc_calc -name ${ID} -latest -profile k8s -params-file
-          /tmp/params.json -with-weblog
-          http://pgscalc-log-webhook-eventsource-svc:4567
+          /bin/echo "${PARAMS}" > /tmp/params.json; cat /tmp/params.json;
+          /bin/echo "${INPUT}" > /tmp/input.json; cat /tmp/input.json; nextflow
+          run pgscatalog/pgsc_calc -name ${ID} -r dev -latest -profile k8s -params-file
+          /tmp/params.json -with-weblog http://pgscalc-log-webhook-eventsource-svc:4567
+          --input /tmp/input.json
       command:
         - /bin/sh
         - '-c'
       env:
-        - name: JSON
+        - name: INPUT
+          value: REPLACED
+        - name: PARAMS
           value: REPLACED
         - name: NXF_WORK
           value: REPLACED
@@ -46,13 +49,13 @@ spec:
   volumes:
     - name: vol-1
       persistentVolumeClaim:
-        claimName: nfsclaim
+        claimName: ssdnfsclaim
   initContainers:
     - name: init-json-validate
       image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema:4.4.0
-      command: ['sh', '-c', '/bin/echo "${JSON}" > /tmp/params.json; cat /tmp/params.json; jsonschema calculate-schema.json -i /tmp/params.json']
+      command: ['sh', '-c', 'wget https://raw.githubusercontent.com/PGScatalog/pgsc_calc/dev/assets/schema_k8s.json /bin/echo "${PAYLOAD}" > /tmp/params.json; cat /tmp/params.json; jsonschema schema_k8s.json -i /tmp/params.json']
       env: 
-        - name: JSON
+        - name: PAYLOAD
           value: REPLACED
   imagePullSecrets: 
       - name: gitlabpullimage

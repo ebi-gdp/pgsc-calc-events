@@ -21,16 +21,20 @@ spec:
         parameters:
           - src:
               dependencyName: payload
-              dataKey: body.params
+              dataKey: body.target_genomes
             dest: spec.containers.0.env.0.value
           - src:
               dependencyName: payload
-              dataKey: body.nxf_work
+              dataKey: body.nxf_params_file
             dest: spec.containers.0.env.1.value
           - src:
               dependencyName: payload
-              dataKey: body.id
+              dataKey: body.nxf_work
             dest: spec.containers.0.env.2.value
+          - src:
+              dependencyName: payload
+              dataKey: body.id
+            dest: spec.containers.0.env.3.value
           - src:
               dependencyName: payload
               dataKey: body
