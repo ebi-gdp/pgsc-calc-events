@@ -49,11 +49,11 @@ spec:
   volumes:
     - name: vol-1
       persistentVolumeClaim:
-        claimName: ssdnfsclaim
+        claimName: nfsclaim
   initContainers:
     - name: init-json-validate
-      image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema:4.4.0
-      command: ['sh', '-c', 'wget https://raw.githubusercontent.com/PGScatalog/pgsc_calc/dev/assets/schema_k8s.json /bin/echo "${PAYLOAD}" > /tmp/params.json; cat /tmp/params.json; jsonschema schema_k8s.json -i /tmp/params.json']
+      image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema@sha256:3827b31b381b142d62962205384d903001dd8a9b53afc3bdf7a1dcae5ffc30a7
+      command: ['sh', '-c', '/usr/bin/wget https://raw.githubusercontent.com/PGScatalog/pgsc_calc/dev/assets/schema_k8s.json; /bin/echo "${PAYLOAD}" > /tmp/params.json; cat /tmp/params.json; jsonschema schema_k8s.json -i /tmp/params.json']
       env: 
         - name: PAYLOAD
           value: REPLACED
