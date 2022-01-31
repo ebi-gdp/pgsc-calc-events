@@ -12,7 +12,7 @@ spec:
       name: kafka-trigger
       kafka:
         url: my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
-        topic: my-topic
+        topic: pipeline-status
         partition: 0
         payload:
             - src:
