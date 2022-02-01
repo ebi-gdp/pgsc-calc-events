@@ -45,11 +45,16 @@ spec:
       volumeMounts:
         - mountPath: /workspace
           name: vol-1
+        - mountPath: /results
+          name: vol-2
   restartPolicy: Never
   volumes:
     - name: vol-1
       persistentVolumeClaim:
         claimName: ssdnfsclaim
+    - name: vol-2
+      persistentVolumeClaim:
+        claimName: nfs-claim
   initContainers:
     - name: init-json-validate
       image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema@sha256:3827b31b381b142d62962205384d903001dd8a9b53afc3bdf7a1dcae5ffc30a7
