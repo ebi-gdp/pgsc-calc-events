@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: pgscalc-log-complete
+spec:
+  dependencies:
+    - name: complete-dep
+      eventSourceName: pgscalc-log-webhook
+      eventName: log
+      filters:
+        data:
+          - path: body.event
+            type: string
+            value:
+              - "^completed"
+  triggers:
+  - template:
+      name: complete-trigger
+      kafka:
+        url: my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+        topic: pipeline-status
+        partition: 0
+        payload:
+            - src:
+                dependencyName: complete-dep
+                dataKey: body.event
+              dest: status
+            - src:
+                dependencyName: complete-dep
+                dataKey: body.runName
+              dest: uid
+            - src:
+                dependencyName: complete-dep
+                dataKey: body.utcTime
+              dest: time
+            - src:
+                dependencyName: complete-dep
+                dataKey: body.metadata.parameters.outdir
+              dest: outdir

@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
-  name: pgscalc-log
+  name: pgscalc-log-error
 spec:
   dependencies:
-    - name: test-log
+    - name: error-dep
       eventSourceName: pgscalc-log-webhook
       eventName: log
       filters:
@@ -12,31 +12,28 @@ spec:
           - path: body.event
             type: string
             value:
-              - "^started"
-              - "^completed"
               - "^error"
   triggers:
   - template:
-      name: kafka-trigger
+      name: error-trigger
       kafka:
         url: my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
         topic: pipeline-status
         partition: 0
         payload:
             - src:
-                dependencyName: test-log
+                dependencyName: error-dep
                 dataKey: body.event
               dest: status
             - src:
-                dependencyName: test-log
+                dependencyName: error-dep
                 dataKey: body.runName
               dest: uid
             - src:
-                dependencyName: test-log
+                dependencyName: error-dep
                 dataKey: body.utcTime
               dest: time
             - src:
-                dependencyName: test-log
-                dataKey: body.metadata.parameters.outdir
-              dest: outdir
-
+                dependencyName: error-dep
+                dataKey: body.meta
+              dest: meta              

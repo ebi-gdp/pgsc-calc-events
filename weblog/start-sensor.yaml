@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: pgscalc-log-start
+spec:
+  dependencies:
+    - name: started-dep
+      eventSourceName: pgscalc-log-webhook
+      eventName: log
+      filters:
+        data:
+          - path: body.event
+            type: string
+            value:
+              - "^started"
+  triggers:
+  - template:
+      name: started-trigger
+      kafka:
+        url: my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+        topic: pipeline-status
+        partition: 0
+        payload:
+            - src:
+                dependencyName: started-dep
+                dataKey: body.event
+              dest: status
+            - src:
+                dependencyName: started-dep
+                dataKey: body.runName
+              dest: uid
+            - src:
+                dependencyName: started-dep
+                dataKey: body.utcTime
+              dest: time
