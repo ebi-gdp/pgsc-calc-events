@@ -7,6 +7,14 @@ spec:
     - name: test-log
       eventSourceName: pgscalc-log-webhook
       eventName: log
+      filters:
+        data:
+          - path: body.event
+            type: string
+            value:
+              - "^started"
+              - "^completed"
+              - "^error"
   triggers:
   - template:
       name: kafka-trigger
@@ -18,21 +26,17 @@ spec:
             - src:
                 dependencyName: test-log
                 dataKey: body.event
-              dest: event
+              dest: status
             - src:
                 dependencyName: test-log
                 dataKey: body.runName
-              dest: id
+              dest: uid
             - src:
                 dependencyName: test-log
                 dataKey: body.utcTime
-              dest: utcTime
+              dest: time
             - src:
                 dependencyName: test-log
-                dataKey: body.runId
-              dest: runId
-            - src:
-                dependencyName: test-log
-                dataKey: body.metadata
-              dest: metadata          
+                dataKey: body.metadata.parameters.outdir
+              dest: outdir
 
