@@ -10,7 +10,7 @@ spec:
         - >-
           /bin/echo "${PARAMS}" > /tmp/params.json; cat /tmp/params.json;
           /bin/echo "${INPUT}" > /tmp/input.json; cat /tmp/input.json; nextflow
-          run pgscatalog/pgsc_calc -name ${ID} -r dev -latest -profile k8s -params-file
+          run pgscatalog/pgsc_calc -name ${ID} -r 0.1.3dev -latest -profile k8s -params-file
           /tmp/params.json -with-weblog http://pgscalc-log-webhook-eventsource-svc:4567
           --input /tmp/input.json
       command:
