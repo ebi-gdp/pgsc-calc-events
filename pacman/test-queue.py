@@ -4,9 +4,9 @@ from flask import Flask, request
 import threading, queue
 import sqlite3
 from typing import Dict, Tuple
-import time
 import pandas as pd
 import logging
+import tempfile
 
 app = Flask(__name__)
 q = queue.Queue()
@@ -31,7 +31,9 @@ def logging_worker(barrier):
     app.run(threaded=False)
 
 def sqlite_worker(db, barrier):
-    """ Store JSON logs in a sqlite database """
+    """ Store JSON logs in a sqlite database.
+
+    Hopefully blocking and transactions will avoid a race condition. """
     barrier.wait()
     con: sqlite3.Connection = sqlite3.connect(db)
     cur = con.cursor()
@@ -46,36 +48,38 @@ def sqlite_worker(db, barrier):
         q.task_done()
 
 def status_worker(db, event_start, event_complete):
-    """ Check if the pipeline finished """
+    """ Monitor the database for pipeline progress """
 
     con: sqlite3.Connection = sqlite3.connect(db)
 
-    while not event_complete.isSet(): # event_complete.wait() ?
-        df = pd.read_sql('SELECT * from logs', con)
-        started = df.query('event == "started"')
-        completed = df.query('event == "completed"')
+    while True:
+        if not event_complete.wait(1): # wait blocks, timeout checks 1 per sec
+            df = pd.read_sql('SELECT * from logs', con)
+            started = df.query('event == "started"')
+            completed = df.query('event == "completed"')
 
-        if not started.empty and not event_start.isSet():
-            logging.debug('Pipeline started')
-            event_start.set()
+            assert started.shape[0] <= 1, "Duplicated start logs in DB"
+            assert completed.shape[0] <= 1, "Duplicated complete logs in DB"
 
-        if not completed.empty:
-            logging.debug('Pipeline completed')
-            event_complete.set()
+            if not started.empty and not event_start.isSet():
+                logging.debug('Pipeline started')
+                event_start.set()
 
-        time.sleep(1) # sleep this thread and check again in 5 seconds
+            if not completed.empty:
+                logging.debug('Pipeline completed')
+                event_complete.set()
 
 def clear_db(db, event_start, event_complete):
     """ Clear the database ready for logs from a new pipeline job """
-    while not event_complete.isSet(): # non-blocking function call
-        if event_complete.wait():
-            q.join() # block the queue - now it's empty
+    while True:
+        if event_complete.wait(1):
+            q.join() # block the queue - wait until it's empty
             con: sqlite3.Connection = sqlite3.connect(db)
             cur = con.cursor()
             cur.execute("DELETE FROM logs") # drop all rows
             con.commit()
             con.close()
-            logging.debug('Local database cleared')
+            logging.debug('Job complete, local database cleared')
             event_start.clear()
             event_complete.clear()
 
@@ -83,14 +87,16 @@ def main():
     """ Doesn't support concurrent nextflow weblogs """
     logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-9s) %(message)s',)
-    db = 'test.db'
+    db = tempfile.NamedTemporaryFile(delete=False)
+    logging.debug('SQLite database: {}'.format(db.name))
+
     barrier = threading.Barrier(2)
     event_start = threading.Event()
     event_complete = threading.Event()
     threading.Thread(target = logging_worker, args = (barrier,), daemon=True).start()
-    threading.Thread(target = sqlite_worker, args = (db,barrier), daemon=True).start()
-    threading.Thread(target = status_worker, args = (db, event_start, event_complete)).start()
-    threading.Thread(target = clear_db, args = (db, event_start, event_complete)).start()
+    threading.Thread(target = sqlite_worker, args = (db.name,barrier), daemon=True).start()
+    threading.Thread(target = status_worker, args = (db.name, event_start, event_complete)).start()
+    threading.Thread(target = clear_db, args = (db.name, event_start, event_complete)).start()
 
 
 if __name__ == "__main__":
