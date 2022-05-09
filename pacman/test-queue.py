@@ -7,12 +7,16 @@ from typing import Dict, Tuple
 import pandas as pd
 import logging
 import tempfile
+import subprocess
+from kafka import KafkaConsumer
+import json
+import time
 
 app = Flask(__name__)
 q = queue.Queue()
 
 @app.route('/log', methods=['POST'])
-def log() -> Tuple[str, int]:
+def log():
     """ Add valid JSON requests to the queue """
 
     if request.is_json:
@@ -21,20 +25,20 @@ def log() -> Tuple[str, int]:
     else:
         return 'Must be JSON :(', 400
 
-def logging_worker(barrier):
+
+def logging_worker():
     """ Start logging nextflow data via HTTP web logs.
 
     The default Flask HTTP server is only suitable for deployment in internal
     firewalled places, with low loads. Please don't use on the public Internet.
     """
-    barrier.wait()
     app.run(threaded=False)
 
-def sqlite_worker(db, barrier):
+
+def sqlite_worker(db):
     """ Store JSON logs in a sqlite database.
 
     Hopefully blocking and transactions will avoid a race condition. """
-    barrier.wait()
     con: sqlite3.Connection = sqlite3.connect(db)
     cur = con.cursor()
     cur.execute(''' CREATE TABLE IF NOT EXISTS logs
@@ -49,7 +53,7 @@ def sqlite_worker(db, barrier):
 
 def status_worker(db, event_start, event_complete):
     """ Monitor the database for pipeline progress """
-
+    logging.info('Checking status')
     con: sqlite3.Connection = sqlite3.connect(db)
 
     while True:
@@ -62,12 +66,13 @@ def status_worker(db, event_start, event_complete):
             assert completed.shape[0] <= 1, "Duplicated complete logs in DB"
 
             if not started.empty and not event_start.isSet():
-                logging.debug('Pipeline started')
+                logging.info('Pipeline started')
                 event_start.set()
 
             if not completed.empty:
-                logging.debug('Pipeline completed')
+                logging.info('Pipeline completed')
                 event_complete.set()
+
 
 def clear_db(db, event_start, event_complete):
     """ Clear the database ready for logs from a new pipeline job """
@@ -79,25 +84,57 @@ def clear_db(db, event_start, event_complete):
             cur.execute("DELETE FROM logs") # drop all rows
             con.commit()
             con.close()
-            logging.debug('Job complete, local database cleared')
+            logging.info('Job complete, local database cleared')
             event_start.clear()
             event_complete.clear()
 
+def launch_nextflow(params):
+    """ TODO: Replace with K8S API """
+    subprocess.run(["nextflow", "run", "hello", "-with-weblog", "http://localhost:5000/log"], capture_output = True)
+
+def parse_json(m):
+    try:
+        return json.loads(m.decode('ascii'))
+    except json.decoder.JSONDecodeError:
+        return json.loads('{}')
+
+def kafka_worker():
+    launch_consumer = KafkaConsumer('my-topic',
+                                group_id='my-group',
+                                bootstrap_servers=['localhost:9092'],
+                                value_deserializer=lambda m: parse_json(m))
+
+    for message in launch_consumer:
+        if message.value == json.loads('{}'):
+            logging.info('Invalid message (JSON not parsed)')
+            continue
+        else:
+            # TODO validate with JSON schema
+            logging.info('Valid message received')
+            launch_nextflow(message.value)
+            # TODO: launch nextflow, message.value contains parameters
+
 def main():
     """ Doesn't support concurrent nextflow weblogs """
-    logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-9s) %(message)s',)
-    db = tempfile.NamedTemporaryFile(delete=False)
-    logging.debug('SQLite database: {}'.format(db.name))
 
-    barrier = threading.Barrier(2)
+    logging.basicConfig(level=logging.INFO,
+                    format='(%(threadName)-9s) %(message)s',)
+    logging.getLogger("kafka").setLevel(logging.WARNING) # kafka is verbose
+
+    db = tempfile.NamedTemporaryFile(delete=False)
+    logging.info('SQLite database: {}'.format(db.name))
+
+    # prepare and launch worker threads ----------------------------------------
     event_start = threading.Event()
     event_complete = threading.Event()
-    threading.Thread(target = logging_worker, args = (barrier,), daemon=True).start()
-    threading.Thread(target = sqlite_worker, args = (db.name,barrier), daemon=True).start()
+
+    threading.Thread(target = logging_worker, daemon=True).start()
+    threading.Thread(target = sqlite_worker, args = (db.name, ), daemon=True).start()
     threading.Thread(target = status_worker, args = (db.name, event_start, event_complete)).start()
     threading.Thread(target = clear_db, args = (db.name, event_start, event_complete)).start()
 
+    # start consuming launch requests via kafka --------------------------------
+    threading.Thread(target = kafka_worker).start()
 
 if __name__ == "__main__":
     main()
