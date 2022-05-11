@@ -4,32 +4,37 @@ from os import path
 from time import sleep
 import yaml
 from kubernetes import client, config
-
 from os import path
 from time import sleep
-
-import yaml
-
+import logging
 from kubernetes import client, config
+from kafka import KafkaConsumer
+import json
 
 def build_arguments():
     """ Build a complicated container argument string in a clearer way """
 
-    # nextflow requires JSON params in a file, so redirect the environment variable
-    json_args = " ".join(["/bin/echo", "${JSON}", ">", "/tmp/params.json", ";", ""])
+    # nextflow parameters must be in a JSON file
+    param_args = " ".join(["/bin/echo", "${JSON}", ">", "/tmp/params.json", ";", ""])
+
+    # pipeline input must be in a JSON file
+    input_args = " ".join(["/bin/echo", "${INPUT}", ">", "/tmp/input.json", ";", ""])
 
     # useful for checking params from kubectl logs
-    debug_args = " ".join(["cat", "/tmp/params.json", ";", ""])
+    debug_args = " ".join(["cat", "/tmp/params.json", "/tmp/input.json", ";", ""])
 
     # run the pipeline!
     nxf_args = " ".join(["nextflow", "run", "pgscatalog/pgsc_calc", "-name", "${ID}",
                          "-r", "dev", "-latest", "-profile", "k8s,test",
                          "-params-file", "/tmp/params.json", "-with-weblog",
-                         "http://pgscalc-log-webhook-eventsource-svc:4567"])
+                         "http://pgscalc-log-webhook-eventsource-svc:4567",
+                         "--input", "/tmp/input.json"])
 
+    # useful for running a dummy nextflow pipeline
     dummy_nxf = "nextflow run hello"
+
     # stick arguments together, container executes /bin/sh -c ...
-    return ['-c', json_args + debug_args + dummy_nxf] # TODO: nxf_args
+    return ['-c', param_args + input_args + debug_args + dummy_nxf] # TODO: nxf_args
 
 def create_job_object(params, JOB_NAME):
 
@@ -66,7 +71,7 @@ def create_job(api_instance, job):
     api_response = api_instance.create_namespaced_job(
         body=job,
         namespace="test")
-    print("job created!")
+    logging.info("job created")
     get_job_status(api_instance, job.metadata.name)
 
 
@@ -81,7 +86,7 @@ def get_job_status(api_instance, JOB_NAME):
             job_started = True
         sleep(1)
 
-    print("job started!")
+    logging.info("job started")
 
     job_completed = False
     while not job_completed:
@@ -93,7 +98,7 @@ def get_job_status(api_instance, JOB_NAME):
             job_completed = True
         sleep(1)
 
-    print("job completed!")
+    logging.info("job completed")
 
 def delete_job(api_instance, JOB_NAME):
     api_response = api_instance.delete_namespaced_job(
@@ -102,8 +107,14 @@ def delete_job(api_instance, JOB_NAME):
         body=client.V1DeleteOptions(
             propagation_policy='Foreground',
             grace_period_seconds=5))
-    print("job deleted! (cleanup)")
+    logging.info("job deleted (cleanup)")
 
+
+def parse_json(m):
+    try:
+        return json.loads(m.decode('ascii'))
+    except json.decoder.JSONDecodeError:
+        return json.loads('{}')
 
 def main():
     # Configs can be set in Configuration class directly or using helper
@@ -112,16 +123,27 @@ def main():
     config.load_kube_config()
     batch_v1 = client.BatchV1Api()
 
-    # TODO: autogenerate based on kafka consumer?
-    JOB_NAME = "nxf"
+    logging.basicConfig(level=logging.INFO,
+                    format='(%(threadName)-9s) %(message)s',)
+    logging.getLogger("kafka").setLevel(logging.WARNING) # kafka is verbose
 
-    # Create a job object with client-python API. The job we
-    # created is same as the `pi-job.yaml` in the /examples folder.
-    job = create_job_object(params = None, JOB_NAME = JOB_NAME)
+    launch_consumer = KafkaConsumer('my-topic',
+                                group_id='my-group',
+                                bootstrap_servers=['localhost:9092'],
+                                value_deserializer=lambda m: parse_json(m))
 
-    create_job(batch_v1, job)
+    for message in launch_consumer:
+        if message.value == json.loads('{}'):
+            logging.info('Invalid message (JSON not parsed)')
+            continue
+        else:
+            # TODO validate with JSON schema ?
+            logging.info('Valid message received')
+            JOB_NAME = "nxf"
+            job = create_job_object(params = None, JOB_NAME = JOB_NAME)
+            create_job(batch_v1, job)
+            delete_job(batch_v1, JOB_NAME)
 
-    delete_job(batch_v1, JOB_NAME)
 
 
 if __name__ == '__main__':
