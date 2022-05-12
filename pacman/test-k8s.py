@@ -178,14 +178,19 @@ def main():
                                 value_deserializer=lambda m: parse_json(m))
 
     for message in launch_consumer:
-        if message.value == json.loads('{}'):
-            logging.info('Invalid message (JSON not parsed)')
-            continue
-        else:
-            # TODO validate with JSON schema ?
+            # do proper validation with json schema, just skip weird messages
+            try:
+                JOB_NAME = message.value['id']
+                target_genomes = message.value['target_genomes']
+                params = message.value['nxf_params_file']
+                workdir = message.value['nxf_work']
+            except KeyError:
+                logging.info('Invalid message received, skipping')
+                continue
+
             logging.info('Valid message received')
-            JOB_NAME = "nxf"
-            job = create_job_object(params = None, JOB_NAME = JOB_NAME)
+            params = None
+            job = create_job_object(params, JOB_NAME)
             create_job(batch_v1, job)
             delete_job(batch_v1, JOB_NAME)
 
