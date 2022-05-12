@@ -11,8 +11,8 @@ from kubernetes import client, config
 from kafka import KafkaConsumer
 import json
 
-def build_arguments():
-    """ Build a complicated container argument string in a clearer way """
+def create_arguments_list():
+    """ Build a complicated container argument string """
 
     # nextflow parameters must be in a JSON file
     param_args = " ".join(["/bin/echo", "${JSON}", ">", "/tmp/params.json", ";", ""])
@@ -20,7 +20,7 @@ def build_arguments():
     # pipeline input must be in a JSON file
     input_args = " ".join(["/bin/echo", "${INPUT}", ">", "/tmp/input.json", ";", ""])
 
-    # useful for checking params from kubectl logs
+    # useful for debugging logs
     debug_args = " ".join(["cat", "/tmp/params.json", "/tmp/input.json", ";", ""])
 
     # run the pipeline!
@@ -36,23 +36,68 @@ def build_arguments():
     # stick arguments together, container executes /bin/sh -c ...
     return ['-c', param_args + input_args + debug_args + dummy_nxf] # TODO: nxf_args
 
+
+def create_resource_requirements_object():
+    """ Create a resource requirements object for the nextflow driver container.
+
+    https://www.nextflow.io/blog/2021/5_tips_for_hpc_users.html
+    'An average pipeline may require 2 CPUs and 2 GB of resources allocation.'
+    """
+
+    limits = {'cpu': 2, 'memory': '4G'}
+    requests = {'cpu': 2, 'memory': '2G'}
+    return client.V1ResourceRequirements(limits, requests)
+
+
+def create_volumes_list():
+    """ Create a list of named volumes """
+    ssd_pvc = client.V1PersistentVolumeClaimVolumeSource(claim_name = 'ssdnfsclaim')
+    return[client.V1Volume(name = 'vol-1', persistent_volume_claim = ssd_pvc)]
+
+
+def create_volume_mounts_list():
+    """ Create a list of volume mounts.
+
+    The pipeline needs fast SSD storage for intermediate work directories.
+
+    TODO: use a sub path to isolate pipeline instances
+    """
+    return [client.V1VolumeMount(name = 'vol-1', mount_path = '/workspace')]
+
+def create_environment_vars_object(params):
+    """ Combine static environment variables with parameters from Kafka """
+
+    # TODO read from config map?
+    nxf_static = {'NXF_OPTS': '-Xms500M -Xmx3500M',
+                  'NXF_EXECUTOR': 'k8s',
+                  'NXF_ANSI_LOG': 'false',
+                  'NXF_HOME': '/workpace/nxf_home'}
+
+    return [client.V1EnvVar(k, v) for k, v in {**params, **nxf_static}.items()]
+
 def create_job_object(params, JOB_NAME):
 
     # create environment variables from kafka message
     params = {'JSON': '{}', 'ID': 'uniqueid'}
-    env_vars = [client.V1EnvVar(k, v) for k, v in params.items()]
 
     # Configureate Pod template container
     container = client.V1Container(
         name="nxf-controller",
         image="docker.io/nextflow/nextflow:21.10.6",
-        args = build_arguments(),
-        env = env_vars,
-        command=["/bin/sh"])
+        args = create_arguments_list(),
+        env = create_environment_vars_object(params),
+        command=["/bin/sh"],
+        volume_mounts = create_volume_mounts_list(),
+        resources = create_resource_requirements_object())
+        # TODO: working_dir = ???)
+
     # Create and configure a spec section
     template = client.V1PodTemplateSpec(
         metadata=client.V1ObjectMeta(labels={"app": "pi"}),
-        spec=client.V1PodSpec(restart_policy="Never", containers=[container]))
+        spec=client.V1PodSpec(restart_policy="Never",
+                              containers=[container],
+                              volumes=create_volumes_list()))
+
     # Create the specification of deployment
     spec = client.V1JobSpec(
         template=template,
