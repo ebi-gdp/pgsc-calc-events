@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: replaced
+  labels:
+    app: nextflow
+spec:
+  ttlSecondsAfterFinished: 0
+  template:
+    spec:
+      containers:
+        - args:
+            - >-
+              /bin/echo "${JSON}" > /tmp/params.json; /bin/echo "${INPUT$} > /tmp/input.json;
+              cat /tmp/params.json /tmp/input.json; 
+              nextflow run pgscatalog/pgsc_calc -r ${VERSION} \
+                  -name ${ID} \
+                  -latest \
+                  -profile k8s \
+                  -params-file /tmp/params.json \
+                  -with-weblog http://pgscalc-log-webhook-eventsource-svc:4567 \
+                  --input /tmp/input.json
+          command:
+            - /bin/sh
+            - '-c'
+          env:
+            - name: JSON
+              value: REPLACED
+            - name: INPUT
+              value: REPLACED              
+            - name: NXF_WORK
+              value: REPLACED
+            - name: ID
+              value: REPLACED
+            - name: VERSION
+              value: dev
+            - name: NXF_ANSI_LOG
+              value: 'false'
+            - name: NXF_HOME
+              value: /workspace/nxf_home
+            - name: NXF_EXECUTOR
+              value: k8s
+            - name: NXF_OPTS
+              value: -Xms500M -Xmx3500M
+          image: 'docker.io/nextflow/nextflow:21.10.6'
+          name: nextflow
+          resources:
+            limits:
+              cpu: 2
+              memory: 3G
+            requests:
+              cpu: 2
+              memory: 2G
+          volumeMounts:
+            - mountPath: /workspace
+              name: vol-1
+      restartPolicy: Never
+      volumes:
+        - name: vol-1
+          persistentVolumeClaim:
+            claimName: ssdnfsclaim
+      initContainers:
+        - name: init-validate-json
+          image: dockerhub.ebi.ac.uk/gdp/pgsc-calc-events/jsonschema@sha256:3827b31b381b142d62962205384d903001dd8a9b53afc3bdf7a1dcae5ffc30a7
+          command: ['sh', '-c', '/usr/bin/wget https://raw.githubusercontent.com/PGScatalog/pgsc_calc/dev/assets/schema_k8s.json; /bin/echo "${PARAMS}" > /tmp/params.json; cat /tmp/params.json; jsonschema schema_k8s.json -i /tmp/params.json']
+          env: 
+            - name: PARAMS
+              value: REPLACED
+      imagePullSecrets: 
+          - name: gitlabpullimage
+
