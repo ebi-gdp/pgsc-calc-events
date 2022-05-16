@@ -15,26 +15,26 @@ def create_arguments_list():
     """ Build a complicated container argument string """
 
     # nextflow parameters must be in a JSON file
-    param_args = " ".join(["/bin/echo", "${JSON}", ">", "/tmp/params.json", ";", ""])
+    param_args = " ".join(["/bin/echo", "${nxf_params_file}", ">", "/tmp/params.json", ";", ""])
 
     # pipeline input must be in a JSON file
-    input_args = " ".join(["/bin/echo", "${INPUT}", ">", "/tmp/input.json", ";", ""])
+    input_args = " ".join(["/bin/echo", "${target_genomes}", ">", "/tmp/input.json", ";", ""])
 
     # useful for debugging logs
     debug_args = " ".join(["cat", "/tmp/params.json", "/tmp/input.json", ";", ""])
 
     # run the pipeline!
-    nxf_args = " ".join(["nextflow", "run", "pgscatalog/pgsc_calc", "-name", "${ID}",
-                         "-r", "dev", "-latest", "-profile", "k8s,test",
+    nxf_args = " ".join(["nextflow", "run", "pgscatalog/pgsc_calc", "-name", "${id}",
+                         "-r", "dev", "-latest", "-profile", "k8s",
                          "-params-file", "/tmp/params.json", "-with-weblog",
                          "http://pgscalc-log-webhook-eventsource-svc:4567",
-                         "--input", "/tmp/input.json"])
+                         "-w", "${nxf_work}", "--input", "/tmp/input.json"])
 
     # useful for running a dummy nextflow pipeline
-    dummy_nxf = "nextflow run hello"
+    # dummy_nxf = "nextflow run hello"
 
     # stick arguments together, container executes /bin/sh -c ...
-    return ['-c', param_args + input_args + debug_args + dummy_nxf] # TODO: nxf_args
+    return ['-c', param_args + input_args + debug_args + nxf_args] # TODO: nxf_args
 
 
 def create_resource_requirements_object():
@@ -71,15 +71,13 @@ def create_environment_vars_object(params):
     nxf_static = {'NXF_OPTS': '-Xms500M -Xmx3500M',
                   'NXF_EXECUTOR': 'k8s',
                   'NXF_ANSI_LOG': 'false',
-                  'NXF_HOME': '/workpace/nxf_home'}
+                  'NXF_HOME': '/workspace/nxf_home'}
 
-    return [client.V1EnvVar(k, v) for k, v in {**params, **nxf_static}.items()]
+    # encode
+    json_params = {k: json.dumps(v) for k, v in params.items()}
+    return [client.V1EnvVar(k, v) for k, v in {**json_params, **nxf_static}.items()]
 
 def create_job_object(params, JOB_NAME):
-
-    # create environment variables from kafka message
-    params = {'JSON': '{}', 'ID': 'uniqueid'}
-
     # Configureate Pod template container
     container = client.V1Container(
         name="nxf-controller",
@@ -88,8 +86,8 @@ def create_job_object(params, JOB_NAME):
         env = create_environment_vars_object(params),
         command=["/bin/sh"],
         volume_mounts = create_volume_mounts_list(),
-        resources = create_resource_requirements_object())
-        # TODO: working_dir = ???)
+        resources = create_resource_requirements_object(),
+        working_dir = "/workspace")
 
     # Create and configure a spec section
     template = client.V1PodTemplateSpec(
@@ -180,19 +178,24 @@ def main():
     for message in launch_consumer:
             # do proper validation with json schema, just skip weird messages
             try:
-                JOB_NAME = message.value['id']
-                target_genomes = message.value['target_genomes']
-                params = message.value['nxf_params_file']
-                workdir = message.value['nxf_work']
+                [message.value[x] for x in ['id', 'target_genomes', 'nxf_params_file', 'nxf_work']]
             except KeyError:
-                logging.info('Invalid message received, skipping')
+                logging.warning('Invalid message received, skipping')
                 continue
 
             logging.info('Valid message received')
-            params = None
-            job = create_job_object(params, JOB_NAME)
-            create_job(batch_v1, job)
-            delete_job(batch_v1, JOB_NAME)
+
+            job = create_job_object(params = message.value,
+                                    JOB_NAME = message.value['id'])
+
+            try:
+                create_job(batch_v1, job)
+                delete_job(batch_v1, JOB_NAME = message.value['id'])
+            except client.exceptions.ApiException:
+                logging.warning('K8S API exception, job skipped')
+                continue
+
+
 
 
 
