@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: nxf-driver-
+  labels:
+    app: nextflow
+    instance-id: nxf-unique-run-id # modified by queue ingestion
+    version: dev # modified by queue ingestion
+spec:
+  ttlSecondsAfterFinished: 0
+  template:
+    spec:
+      containers:
+        - args:
+            - nextflow run hello
+          command:
+            - /bin/sh
+            - '-c'
+          env:
+            - name: ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['instance-id']
+            - name: VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['version']
+            - name: NXF_PARAMS_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: nxf-base
+                  key: nxf_params_file
+            - name: NXF_OFFLINE
+              valueFrom:
+                configMapKeyRef:
+                  name: nxf-base
+                  key: nxf_offline
+            - name: NXF_ANSI_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: nxf-base
+                  key: nxf_ansi_log
+            - name: NXF_OPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: nxf-base
+                  key: nxf_opts
+          image: 'docker.io/nextflow/nextflow:21.10.6'
+          name: nextflow
+          resources:
+            limits:
+              cpu: 2
+              memory: 4G
+            requests:
+              cpu: 2
+              memory: 2G
+          volumeMounts:
+            - mountPath: /workspace
+              name: vol-1
+      restartPolicy: Never
+      volumes:
+        - name: vol-1
+          persistentVolumeClaim:
+            claimName: ssdnfsclaim

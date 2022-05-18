@@ -1,0 +1,12 @@
+kind: ConfigMap 
+apiVersion: v1 
+metadata:
+  name: nxf-base
+  labels:
+    app: nextflow
+data:
+  nxf_home: /opt/nxf_home/
+  nxf_ansi_log: "false"
+  nxf_opts: -Xms500M -Xmx3500M
+  nxf_offline: "" 
+  nxf_params_file: /config/params.json
