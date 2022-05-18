@@ -1,11 +1,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: nxf-driver-
+  generateName: pgsc-calc-
   labels:
     app: nextflow
-    instance-id: nxf-unique-run-id # modified by queue ingestion
-    version: dev # modified by queue ingestion
+    # labels modified by Python during queue ingestion 
+    consumer-id: consumer-1 
+    run-id: nxf-unique-run-id 
+    version: dev 
 spec:
   ttlSecondsAfterFinished: 0
   template:
@@ -20,7 +22,7 @@ spec:
             - name: ID
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['instance-id']
+                  fieldPath: metadata.labels['run-id']
             - name: VERSION
               valueFrom:
                 fieldRef:
@@ -57,8 +59,15 @@ spec:
           volumeMounts:
             - mountPath: /workspace
               name: vol-1
+              readOnly: false
+            - name: config
+              mountPath: "/config"
+              readOnly: true              
       restartPolicy: Never
       volumes:
         - name: vol-1
           persistentVolumeClaim:
             claimName: ssdnfsclaim
+        - name: config
+          configMap:
+            name: dummy-configmap # modified by python 
